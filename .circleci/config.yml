@@ -1,0 +1,58 @@
+# Java Maven CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-java/ for more details
+#
+version: 2
+jobs:
+  build:
+    docker:
+      # specify the version you desire here
+      - image: circleci/openjdk:8-jdk
+      
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    working_directory: ~/repo
+
+    environment:
+      # Customize the JVM maximum heap limit
+      MAVEN_OPTS: -Xmx3200m
+    
+    steps:
+      - checkout
+
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "pom.xml" }}
+          # fallback to using the latest cache if no exact match is found
+          - v1-dependencies-
+
+      - run: mvn dependency:go-offline
+
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-dependencies-{{ checksum "pom.xml" }}
+        
+      # run tests!
+      - run: mvn integration-test
+
+      - run: echo ${CIRCLE_BRANCH}
+
+      - deploy:
+          name: deploy-to-dev
+          command: |
+            echo ${CIRCLE_BRANCH}
+            if [ "${CIRCLE_BRANCH}" == "master" ]; then
+              mvn package &&
+              unzip /home/circleci/repo/target/moveup-1.0-SNAPSHOT.war &&
+              chmod 400 bin/moveup-dev-tokyo.pem &&
+              scp -o StrictHostKeyChecking=no -i bin/moveup-dev-tokyo.pem  /home/circleci/repo/target/moveup-1.0-SNAPSHOT.war ec2-user@13.230.169.165:/tmp/ &&
+              ssh -o StrictHostKeyChecking=no -i bin/moveup-dev-tokyo.pem ec2-user@13.230.169.165 sudo rm -rf /usr/share/tomcat8/webapps/ROOT/* &&
+              ssh -o StrictHostKeyChecking=no -i bin/moveup-dev-tokyo.pem ec2-user@13.230.169.165 sudo unzip /tmp/moveup-1.0-SNAPSHOT.war -d /usr/share/tomcat8/webapps/ROOT/ &&
+              ssh -o StrictHostKeyChecking=no -i bin/moveup-dev-tokyo.pem ec2-user@13.230.169.165 sudo chmod 777 /usr/share/tomcat8/webapps/ROOT/static/pdf/pdf &&
+              ssh -o StrictHostKeyChecking=no -i bin/moveup-dev-tokyo.pem ec2-user@13.230.169.165 sudo /etc/init.d/tomcat8 restart 
+            fi

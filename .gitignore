@@ -1,0 +1,7 @@
+/.idea/
+.idea/vcs.xml
+.idea/workspace.xml
+target/*
+*.class
+
+src/main/resources/generatorConfig.xml
